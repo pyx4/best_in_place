@@ -55,7 +55,7 @@ module BestInPlace
       out << " data-type='#{opts[:type]}'"
       out << " data-inner-class='#{opts[:inner_class]}'" if opts[:inner_class]
       out << " data-html-attrs='#{opts[:html_attrs].to_json}'" unless opts[:html_attrs].blank?
-      out << " data-original-content='#{attribute_escape(real_object.send(field))}'" if opts[:display_as] || opts[:display_with]
+      out << " data-original-content='#{attribute_escape(real_object.send(field))}'" #if opts[:display_as] || opts[:display_with]
       out << " data-value='#{attribute_escape(value)}'" if value
 
       if opts[:data] && opts[:data].is_a?(Hash)
@@ -88,31 +88,43 @@ module BestInPlace
     def build_value_for(object, field, opts)
       return "" if object.send(field).blank?
 
-      klass = if object.respond_to?(:id)
-        "#{object.class}_#{object.id}"
-      else
-        object.class.to_s
+      # klass = if object.respond_to?(:id)
+      #   "#{object.class}_#{object.id}"
+      # else
+      #   object.class.to_s
+      # end
+
+      # if opts[:display_as]
+      #   BestInPlace::DisplayMethods.add_model_method(klass, field, opts[:display_as])
+      #   object.send(opts[:display_as]).to_s
+
+      # elsif opts[:display_with].try(:is_a?, Proc)
+      #   BestInPlace::DisplayMethods.add_helper_proc(klass, field, opts[:display_with])
+      #   opts[:display_with].call(object.send(field))
+
+      # elsif opts[:display_with]
+      #   BestInPlace::DisplayMethods.add_helper_method(klass, field, opts[:display_with], opts[:helper_options])
+      #   if opts[:helper_options]
+      #     BestInPlace::ViewHelpers.send(opts[:display_with], object.send(field), opts[:helper_options])
+      #   else
+      #     BestInPlace::ViewHelpers.send(opts[:display_with], object.send(field))
+      #   end
+
+      # else
+      #   object.send(field).to_s
+      # end
+
+      renderer = BestInPlace::DisplayMethods.lookup(object.class.name, field) || BestInPlace::DisplayMethods.lookup(object.class.base_class.name, field)
+      if renderer.nil?
+        return object.send(field).to_s
+      elsif renderer.opts[:type] == :helper
+        BestInPlace::ViewHelpers.send(renderer.opts[:method], object.send(field))
+      elsif renderer.opts[:type] == :model
+        object.send(renderer.opts[:method]).to_s
+      elsif renderer.opts[:type] == :proc
+        renderer.opts[:proc].call(object.send(field))
       end
 
-      if opts[:display_as]
-        BestInPlace::DisplayMethods.add_model_method(klass, field, opts[:display_as])
-        object.send(opts[:display_as]).to_s
-
-      elsif opts[:display_with].try(:is_a?, Proc)
-        BestInPlace::DisplayMethods.add_helper_proc(klass, field, opts[:display_with])
-        opts[:display_with].call(object.send(field))
-
-      elsif opts[:display_with]
-        BestInPlace::DisplayMethods.add_helper_method(klass, field, opts[:display_with], opts[:helper_options])
-        if opts[:helper_options]
-          BestInPlace::ViewHelpers.send(opts[:display_with], object.send(field), opts[:helper_options])
-        else
-          BestInPlace::ViewHelpers.send(opts[:display_with], object.send(field))
-        end
-
-      else
-        object.send(field).to_s
-      end
     end
 
     def attribute_escape(data)
